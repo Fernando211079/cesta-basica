@@ -127,7 +127,7 @@ const show = id => ['cfg', 'vale', 'login', 'main'].forEach(x => $(x).classList.
 const P = new URLSearchParams(location.search);
 if (P.get('v')) {
   show('vale');
-  $('vn').textContent = P.get('n') \vert{}\vert{} '';$('vq').innerHTML = qr('VC:' + P.get('v'));
+  $('vn').textContent = P.get('n') || '';$('vq').innerHTML = qr('VC:' + P.get('v'));
 } else if (!firebaseConfig.apiKey) {
   show('cfg');
 } else {
