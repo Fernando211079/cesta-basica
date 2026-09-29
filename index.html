@@ -66,11 +66,11 @@ dialog{border:0;border-radius:10px;padding:20px;max-width:340px;width:90%;text-a
 </head>
 <body>
 
-<div id="cfg" class="box hide"><h2>Falta configurar o Firebase</h2><p>Abra o index.html, cole a configuração do seu projeto no início do script e publique de novo.</p></div>
+<div id="cfg" class="box hide"><h2>Falta configurar o Firebase</h2><p>Abra o index.html, cole a configuração do seu projeto e publique de novo.</p></div>
 
 <main id="vale" class="hide"><div class="ticket"><div class="brand">INDEMETAL</div><h1>Vale 1 Cesta Básica</h1><p id="vn"></p><div id="vq"></div><p>Mostre este QR code na retirada da cesta.</p></div></main>
 
-<form id="login" class="box"><h1>Cesta Básica</h1><input id="em" type="email" placeholder="E-mail" required autocomplete="username"><input id="pw" type="password" placeholder="Senha" required autocomplete="current-password"><button class="pri">Entrar</button><p id="le" class="err"></p></form>
+<form id="login" class="box hide"><h1>Cesta Básica</h1><input id="em" type="email" placeholder="E-mail" required autocomplete="username"><input id="pw" type="password" placeholder="Senha" required autocomplete="current-password"><button class="pri">Entrar</button><p id="le" class="err"></p></form>
 
 <div id="main" class="hide">
 <header><h1>Cesta Básica</h1><label>Mês da cesta <input type="month" id="ciclo"></label><button id="out">Sair</button></header>
@@ -116,105 +116,209 @@ const firebaseConfig = {
   appId: "1:77742108611:web:8f85b1a0f5bb4422795776"
 };
 
-const $=id=>document.getElementById(id);
-const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const fd=ms=>new Date(ms).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
-const qr=t=>{const q=qrcode(0,'M');q.addData(t);q.make();return q.createSvgTag(4,2)};
-const tok=()=>[...crypto.getRandomValues(new Uint8Array(12))].map(b=>b.toString(36).padStart(2,'0')).join('');
-const link=f=>location.href.split('#')[0].split('?')[0]+'?v='+f.token+'&n='+encodeURIComponent(f.nome);
-const show=id=>['cfg','vale','login','main'].forEach(x=>$(x).classList.toggle('hide',x!==id));
+const $ = id => document.getElementById(id);
+const esc = s => String(s??'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const fd = ms => new Date(ms).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
+const qr = t => { const q = qrcode(0, 'M'); q.addData(t); q.make(); return q.createSvgTag(4, 2); };
+const tok = () => [...crypto.getRandomValues(new Uint8Array(12))].map(b => b.toString(36).padStart(2, '0')).join('');
+const link = f => location.href.split('#')[0].split('?')[0] + '?v=' + f.token + '&n=' + encodeURIComponent(f.nome);
+const show = id => ['cfg', 'vale', 'login', 'main'].forEach(x => $(x).classList.toggle('hide', x !== id));
 
-const P=new URLSearchParams(location.search);
-if(P.get('v')){show('vale');$('vn').textContent=P.get('n')\vert{}\vert{}'';$('vq').innerHTML=qr('VC:'+P.get('v'))}
-else if(!firebaseConfig.apiKey || firebaseConfig.apiKey==='COLE_AQUI')show('cfg');
-else boot();
-
-function boot(){
-try{
-const app=initializeApp(firebaseConfig),auth=getAuth(app),db=getFirestore(app);
-let funcs=[],ret=new Map(),ciclo=new Date().toISOString().slice(0,7),unsubR,sc,fromScan=false;
-$('ciclo').value=ciclo;
-
-$('login').onsubmit=async e=>{e.preventDefault();$('le').textContent='';
- try{await signInWithEmailAndPassword(auth,$('em').value,$('pw').value)}catch(x){$('le').textContent='E-mail ou senha incorretos: '+x.message}};$('out').onclick=()=>signOut(auth).then(()=>location.reload());
-onAuthStateChanged(auth,u=>{if(!u)return show('login');show('main');
- onSnapshot(collection(db,'funcionarios'),s=>{funcs=s.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>a.setor.localeCompare(b.setor)||a.nome.localeCompare(b.nome));render()});
- subR()});
-function subR(){unsubR&&unsubR();
- unsubR=onSnapshot(query(collection(db,'retiradas'),where('ciclo','==',ciclo)),s=>{ret=new Map(s.docs.map(d=>[d.data().funcId,{id:d.id,...d.data()}]));render()})}
-$('ciclo').onchange=e=>{ciclo=e.target.value||ciclo;subR()};
-
-$('tabs').onclick=e=>{const b=e.target.closest('button');if(!b)return;
- document.querySelectorAll('#tabs button').forEach(x=>x.classList.toggle('on',x===b));
- document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('on',x.id===b.dataset.t))};
-
-function verdict(k,t,s){const v=$('vd');v.className='v '+k;
- v.innerHTML=`<h2>${esc(t)}</h2><p>${esc(s)}</p><button id="vx">Próximo</button>`;
- $('vx').onclick=()=>{v.className='';v.innerHTML='';if(fromScan)$('bScan').click()}}
-
-async function baixa(f){
- try{const ref=doc(db,'retiradas',ciclo+'_'+f.id);
-  const r=await runTransaction(db,async t=>{const s=await t.get(ref);if(s.exists())return s.data();
-   t.set(ref,{funcId:f.id,nome:f.nome,setor:f.setor,ciclo,data:Date.now(),por:auth.currentUser.email});return null});
-  r?verdict('bad','Já retirou',`${f.nome} retirou em ${fd(r.data)}`):verdict('ok','Baixa realizada',`${f.nome} · ${f.setor}`);
- }catch(e){verdict('bad','Erro ao dar baixa','Verifique a internet e tente de novo.')}}
-
-async function stopScan(){if(!sc)return;try{await sc.stop();sc.clear()}catch(e){}sc=null;$('bScan').textContent='Ler QR code'}$('bScan').onclick=async()=>{
- if(sc)return stopScan();
- sc=new Html5Qrcode('reader');
- try{await sc.start({facingMode:'environment'},{fps:10,qrbox:240},async txt=>{
-   await stopScan();fromScan=true;
-   const f=funcs.find(x=>'VC:'+x.token===txt);
-   f?baixa(f):verdict('bad','QR inválido','Este código não pertence a nenhum funcionário.')});
-  $('bScan').textContent='Parar câmera'}
- catch(e){sc=null;alert('Não foi possível abrir a câmera. Permita o acesso à câmera no navegador.')}};
-
-$('busca').oninput=()=>{const q=$('busca').value.toLowerCase().trim();$('res').innerHTML=q.length<2?'':funcs.filter(f=>f.nome.toLowerCase().includes(q)).slice(0,6).map(f=>
-  `<div class="rs"><span><b>${esc(f.nome)}</b> <small>${esc(f.setor)}</small></span>${ret.has(f.id)?'<span class="pill ok">Já retirou</span>':`<button class="pri" data-b="${f.id}">Dar baixa</button>`}</div>`).join('')};
-$('res').onclick=e=>{const b=e.target.closest('[data-b]');if(!b)return;fromScan=false;baixa(funcs.find(x=>x.id===b.dataset.b))};
-
-$('bImp').onclick=async()=>{
- const have=new Set(funcs.map(f=>f.nome.toLowerCase()));const novos=[];
- $('imp').value.split('\n').forEach(l=>{const p=l.split(/[;\t]/).map(x=>x.trim());
-  if(p[0]&&!have.has(p[0].toLowerCase())){have.add(p[0].toLowerCase());novos.push({nome:p[0],setor:p[1]||'Sem setor',tel:p[2]||'',token:tok()})}});
- if(!novos.length)return alert('Nenhum funcionário novo encontrado na lista.');
- try{for(let i=0;i<novos.length;i+=400){const b=writeBatch(db);
-   novos.slice(i,i+400).forEach(n=>b.set(doc(collection(db,'funcionarios')),n));await b.commit()}
-  $('imp').value='';alert(novos.length+' funcionários importados.')}
- catch(e){alert('Erro ao importar. Confira as regras do Firestore.')}};
-
-function openQr(f){$('dq').innerHTML=qr('VC:'+f.token);$('dn').textContent=f.nome;
- $('dc').onclick=()=>navigator.clipboard.writeText(link(f)).then(()=>$('dc').textContent='Link copiado');
- $('dc').textContent='Copiar link';$('dlg').showModal()}
-function wa(f){let p=(f.tel||'').replace(/\D/g,'');if(p&&p.length<=11)p='55'+p;
- window.open(`https://wa.me/${p}?text=`+encodeURIComponent(`Olá ${f.nome}! Este é o seu vale da Cesta Básica. Abra o link e mostre o QR code na retirada: ${link(f)}`),'_blank')}
-
-$('rows').onclick=e=>{const b=e.target.closest('button');if(!b)return;
- const f=funcs.find(x=>x.id===b.dataset.i);if(!f)return;const a=b.dataset.a;
- if(a==='qr')openQr(f);
- if(a==='wa')wa(f);
- if(a==='un'&&confirm(`Desfazer a baixa de ${f.nome}?`))deleteDoc(doc(db,'retiradas',ret.get(f.id).id));
- if(a==='del'&&confirm(`Excluir ${f.nome} da lista?`))deleteDoc(doc(db,'funcionarios',f.id))};
-$('fq').oninput=$('fs').onchange=()=>render();
-
-$('bPrint').onclick=()=>{$('print').innerHTML=funcs.map(f=>`<div class="pc"><b>Vale 1 Cesta Básica</b>${qr('VC:'+f.token)}${esc(f.nome)}<br><small>${esc(f.setor)}</small></div>`).join('');print()};
-$('bCsv').onclick=()=>{const c='\ufeffSetor;Nome;Situação;Data\n'+funcs.map(f=>{const r=ret.get(f.id);return [f.setor,f.nome,r?'Retirou':'Pendente',r?fd(r.data):''].join(';')}).join('\n');
- const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([c],{type:'text/csv'}));a.download='cesta-'+ciclo+'.csv';a.click()};
-
-function render(){
- const tot=funcs.length,done=funcs.filter(f=>ret.has(f.id)).length;
- const q=$('fq').value.toLowerCase(),st=$('fs').value;
- const L=funcs.filter(f=>(f.nome+' '+f.setor).toLowerCase().includes(q)&&(st==='all'||(st==='ok')===ret.has(f.id)));
- $('rows').innerHTML=L.map(f=>{const r=ret.get(f.id);
-  return `<tr><td><b>${esc(f.nome)}</b><br><small>${esc(f.setor)}</small></td><td>${r?`<span class="pill ok">Retirou ${fd(r.data)}</span>`:'<span class="pill">Pendente</span>'}</td><td class="ac"><button data-a="qr" data-i="${f.id}">QR</button><button data-a="wa" data-i="${f.id}">WhatsApp</button>${r?`<button data-a="un" data-i="${f.id}">Desfazer</button>`:''}<button data-a="del" data-i="${f.id}">Excluir</button></td></tr>`}).join('')
-  ||'<tr><td>Nenhum funcionário ainda. Use "Importar lista" acima.</td></tr>';
- const S={};funcs.forEach(f=>{const s=S[f.setor]??={t:0,d:0};s.t++;if(ret.has(f.id))s.d++});
- $('kpi').innerHTML=`<div><b>${done}</b>retiraram</div><div><b>${tot-done}</b>faltam</div><div><b>${tot}</b>no total</div>`;
- $('setores').innerHTML=Object.entries(S).sort().map(([n,s])=>`<div class="sr"><span>${esc(n)}</span><i><u style="width:${s.d/s.t*100}%"></u></i><span>${s.d}/${s.t}</span></div>`).join('');
- $('busca').oninput()}
-}catch(err){
- alert("Erro ao inicializar: " + err.message);
+const P = new URLSearchParams(location.search);
+if (P.get('v')) {
+  show('vale');
+  $('vn').textContent = P.get('n') \vert{}\vert{} '';$('vq').innerHTML = qr('VC:' + P.get('v'));
+} else if (!firebaseConfig.apiKey) {
+  show('cfg');
+} else {
+  boot();
 }
+
+function boot() {
+  const app = initializeApp(firebaseConfig);
+  const auth = getAuth(app);
+  const db = getFirestore(app);
+  let funcs = [], ret = new Map(), ciclo = new Date().toISOString().slice(0, 7), unsubR, sc, fromScan = false;
+
+  $('ciclo').value = ciclo;
+
+  $('login').onsubmit = async e => {
+    e.preventDefault();
+    $('le').textContent = '';
+    try {
+      await signInWithEmailAndPassword(auth, $('em').value, $('pw').value);
+    } catch (x) {
+      $('le').textContent = 'E-mail ou senha incorretos.';
+    }
+  };
+
+  $('out').onclick = () => signOut(auth).then(() => location.reload());
+
+  onAuthStateChanged(auth, u => {
+    if (!u) return show('login');
+    show('main');
+    onSnapshot(collection(db, 'funcionarios'), s => {
+      funcs = s.docs.map(d => ({id: d.id, ...d.data()})).sort((a, b) => a.setor.localeCompare(b.setor) || a.nome.localeCompare(b.nome));
+      render();
+    });
+    subR();
+  });
+
+  function subR() {
+    if (unsubR) unsubR();
+    unsubR = onSnapshot(query(collection(db, 'retiradas'), where('ciclo', '==', ciclo)), s => {
+      ret = new Map(s.docs.map(d => [d.data().funcId, {id: d.id, ...d.data()}]));
+      render();
+    });
+  }
+
+  $('ciclo').onchange = e => { ciclo = e.target.value || ciclo; subR(); };
+
+  $('tabs').onclick = e => {
+    const b = e.target.closest('button');
+    if (!b) return;
+    document.querySelectorAll('#tabs button').forEach(x => x.classList.toggle('on', x === b));
+    document.querySelectorAll('.tab').forEach(x => x.classList.toggle('on', x.id === b.dataset.t));
+  };
+
+  function verdict(k, t, s) {
+    const v = $('vd');
+    v.className = 'v ' + k;
+    v.innerHTML = `<h2>${esc(t)}</h2><p>${esc(s)}</p><button id="vx">Próximo</button>`;
+    $('vx').onclick = () => { v.className = ''; v.innerHTML = ''; if (fromScan)$('bScan').click(); };
+  }
+
+  async function baixa(f) {
+    try {
+      const ref = doc(db, 'retiradas', ciclo + '_' + f.id);
+      const r = await runTransaction(db, async t => {
+        const s = await t.get(ref);
+        if (s.exists()) return s.data();
+        t.set(ref, {funcId: f.id, nome: f.nome, setor: f.setor, ciclo, data: Date.now(), por: auth.currentUser.email});
+        return null;
+      });
+      r ? verdict('bad', 'Já retirou', `${f.nome} retirou em ${fd(r.data)}`) : verdict('ok', 'Baixa realizada', `${f.nome} · ${f.setor}`);
+    } catch (e) {
+      verdict('bad', 'Erro ao dar baixa', 'Verifique a internet e tente de novo.');
+    }
+  }
+
+  async function stopScan() {
+    if (!sc) return;
+    try { await sc.stop(); sc.clear(); } catch (e) {}
+    sc = null;
+    $('bScan').textContent = 'Ler QR code';
+  }
+
+  $('bScan').onclick = async () => {
+    if (sc) return stopScan();
+    sc = new Html5Qrcode('reader');
+    try {
+      await sc.start({facingMode: 'environment'}, {fps: 10, qrbox: 240}, async txt => {
+        await stopScan();
+        fromScan = true;
+        const f = funcs.find(x => 'VC:' + x.token === txt);
+        f ? baixa(f) : verdict('bad', 'QR inválido', 'Este código não pertence a nenhum funcionário.');
+      });
+      $('bScan').textContent = 'Parar câmera';
+    } catch (e) {
+      sc = null;
+      alert('Não foi possível abrir a câmera. Permita o acesso à câmera no navegador.');
+    }
+  };
+
+  $('busca').oninput = () => {
+    const q = $('busca').value.toLowerCase().trim();$('res').innerHTML = q.length < 2 ? '' : funcs.filter(f => f.nome.toLowerCase().includes(q)).slice(0, 6).map(f =>
+      `<div class="rs"><span><b>${esc(f.nome)}</b> <small>${esc(f.setor)}</small></span>${ret.has(f.id) ? '<span class="pill ok">Já retirou</span>' : `<button class="pri" data-b="${f.id}">Dar baixa</button>`}</div>`
+    ).join('');
+  };
+
+  $('res').onclick = e => {
+    const b = e.target.closest('[data-b]');
+    if (!b) return;
+    fromScan = false;
+    baixa(funcs.find(x => x.id === b.dataset.b));
+  };
+
+  $('bImp').onclick = async () => {
+    const have = new Set(funcs.map(f => f.nome.toLowerCase()));
+    const novos = [];
+    $('imp').value.split('\n').forEach(l => {
+      const p = l.split(/[;\t]/).map(x => x.trim());
+      if (p[0] && !have.has(p[0].toLowerCase())) {
+        have.add(p[0].toLowerCase());
+        novos.push({nome: p[0], setor: p[1] || 'Sem setor', tel: p[2] || '', token: tok()});
+      }
+    });
+    if (!novos.length) return alert('Nenhum funcionário novo encontrado na lista.');
+    try {
+      for (let i = 0; i < novos.length; i += 400) {
+        const b = writeBatch(db);
+        novos.slice(i, i + 400).forEach(n => b.set(doc(collection(db, 'funcionarios')), n));
+        await b.commit();
+      }
+      $('imp').value = '';
+      alert(novos.length + ' funcionários importados.');
+    } catch (e) {
+      alert('Erro ao importar. Confira as regras do Firestore.');
+    }
+  };
+
+  function openQr(f) {
+    $('dq').innerHTML = qr('VC:' + f.token);$('dn').textContent = f.nome;
+    $('dc').onclick = () => navigator.clipboard.writeText(link(f)).then(() =>$('dc').textContent = 'Link copiado');
+    $('dc').textContent = 'Copiar link';$('dlg').showModal();
+  }
+
+  function wa(f) {
+    let p = (f.tel || '').replace(/\D/g, '');
+    if (p && p.length <= 11) p = '55' + p;
+    window.open(`https://wa.me/${p}?text=` + encodeURIComponent(`Olá ${f.nome}! Este é o seu vale da Cesta Básica. Abra o link e mostre o QR code na retirada: ${link(f)}`), '_blank');
+  }
+
+  $('rows').onclick = e => {
+    const b = e.target.closest('button');
+    if (!b) return;
+    const f = funcs.find(x => x.id === b.dataset.i);
+    if (!f) return;
+    const a = b.dataset.a;
+    if (a === 'qr') openQr(f);
+    if (a === 'wa') wa(f);
+    if (a === 'un' && confirm(`Desfazer a baixa de ${f.nome}?`)) deleteDoc(doc(db, 'retiradas', ret.get(f.id).id));
+    if (a === 'del' && confirm(`Excluir ${f.nome} da lista?`)) deleteDoc(doc(db, 'funcionarios', f.id));
+  };
+
+  $('fq').oninput =$('fs').onchange = () => render();
+
+  $('bPrint').onclick = () => {$('print').innerHTML = funcs.map(f => `<div class="pc"><b>Vale 1 Cesta Básica</b>${qr('VC:' + f.token)}${esc(f.nome)}<br><small>${esc(f.setor)}</small></div>`).join('');
+    print();
+  };
+
+  $('bCsv').onclick = () => {
+    const c = '\ufeffSetor;Nome;Situação;Data\n' + funcs.map(f => {
+      const r = ret.get(f.id);
+      return [f.setor, f.nome, r ? 'Retirou' : 'Pendente', r ? fd(r.data) : ''].join(';');
+    }).join('\n');
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([c], {type: 'text/csv'}));
+    a.download = 'cesta-' + ciclo + '.csv';
+    a.click();
+  };
+
+  function render() {
+    const tot = funcs.length, done = funcs.filter(f => ret.has(f.id)).length;
+    const q = $('fq').value.toLowerCase(), st =$('fs').value;
+    const L = funcs.filter(f => (f.nome + ' ' + f.setor).toLowerCase().includes(q) && (st === 'all' || (st === 'ok') === ret.has(f.id)));
+    $('rows').innerHTML = L.map(f => {
+      const r = ret.get(f.id);
+      return `<tr><td><b>${esc(f.nome)}</b><br><small>${esc(f.setor)}</small></td><td>${r ? `<span class="pill ok">Retirou ${fd(r.data)}</span>` : '<span class="pill">Pendente</span>'}</td><td class="ac"><button data-a="qr" data-i="${f.id}">QR</button><button data-a="wa" data-i="${f.id}">WhatsApp</button>${r ? `<button data-a="un" data-i="${f.id}">Desfazer</button>` : ''}<button data-a="del" data-i="${f.id}">Excluir</button></td></tr>`;
+    }).join('') || '<tr><td>Nenhum funcionário ainda. Use "Importar lista" acima.</td></tr>';
+    const S = {};
+    funcs.forEach(f => { const s = S[f.setor] ??= {t: 0, d: 0}; s.t++; if (ret.has(f.id)) s.d++; });
+    $('kpi').innerHTML = `<div><b>${done}</b>retiraram</div><div><b>${tot - done}</b>faltam</div><div><b>${tot}</b>no total</div>`;
+    $('setores').innerHTML = Object.entries(S).sort().map(([n, s]) => `<div class="sr"><span>${esc(n)}</span><i><u style="width:${s.d / s.t * 100}%"></u></i><span>${s.d}/${s.t}</span></div>`).join('');
+    $('busca').oninput();
+  }
 }
 </script>
 </body>
