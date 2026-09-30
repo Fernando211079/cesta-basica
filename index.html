@@ -4,8 +4,6 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="theme-color" content="#7a1420">
-<link rel="manifest" href="manifest.webmanifest">
-<link rel="apple-touch-icon" href="icon-192.png">
 <link rel="icon" href="marca.jpg">
 <title>Cesta Básica · Indemetal</title>
 <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@600;700&display=swap" rel="stylesheet">
@@ -114,6 +112,15 @@ img{max-width:100%}
 .kpi .ic svg{width:24px;height:24px}
 .kpi b{font:700 38px "Barlow Condensed",sans-serif;display:block;line-height:1;color:var(--ink)}
 .kpi span{font-size:13px;color:var(--mut)}
+#kExit{display:none;position:fixed;right:14px;bottom:14px;z-index:60;box-shadow:var(--sh)}
+body.kiosk #kExit{display:inline-flex}
+body.kiosk #tabs{display:none}
+body.kiosk #hd .cic{display:none}
+body.kiosk #out{display:none}
+body.kiosk #bKiosk{display:none}
+body.kiosk .tab{padding-bottom:130px}
+.pendlist{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0 14px;max-height:230px;overflow:auto}
+.pchip{display:inline-flex;align-items:center;gap:7px;background:#f6f7f9;border:1px solid var(--line);border-radius:999px;padding:4px 12px 4px 4px;font-size:13.5px;font-weight:600}
 .panel2{display:grid;grid-template-columns:220px 1fr;gap:14px}
 @media(max-width:640px){.panel2{grid-template-columns:1fr}}
 .panel2 .box2{background:#fff;border:1px solid var(--line);border-radius:var(--r);padding:20px;box-shadow:0 2px 8px rgba(24,27,32,.05)}
@@ -192,16 +199,25 @@ table.prev th{color:var(--mut);font-size:12px;text-transform:uppercase;letter-sp
   body>*:not(#print){display:none!important}
   body{background:#fff}
   #print{display:grid;grid-template-columns:repeat(3,1fr);gap:6mm}
+  #print[data-mode="solo"]{grid-template-columns:1fr;place-items:center;min-height:100vh}
   .pc{border:1.5px solid #000;border-radius:4mm;padding:5mm;text-align:center;break-inside:avoid;font-size:12px}
   .pc .pb{font:700 15px "Barlow Condensed",sans-serif;letter-spacing:1px;color:#000}
   .pc svg{width:100%;height:auto}
+  .pv{width:86mm;border:1.5px solid #000;border-radius:4mm;padding:8mm;text-align:center;break-inside:avoid}
+  .pv img{width:52mm;margin:0 auto 2mm}
+  .pv-tag{font-weight:700;letter-spacing:2px;font-size:11px;border:1px solid #000;border-radius:99px;display:inline-block;padding:1mm 4mm;margin:1mm 0}
+  .pv h2{font:700 26px "Barlow Condensed",sans-serif;margin:1mm 0}
+  .pv-n{font-size:16px;display:block}
+  .pv-r{font-size:12px;margin:1mm 0 3mm}
+  .pv-q svg{width:68mm;height:auto}
+  .pv-i{font-size:11px;margin:3mm 0}
+  .pv-f{font:700 13px "Barlow Condensed",sans-serif;letter-spacing:1.5px;border-top:1px dashed #000;padding-top:2mm}
 }
 @media(max-width:520px){
   #hd .brand2 span{display:none}
   .sr{grid-template-columns:90px 1fr 46px}
 }
 </style>
-<base target="_blank">
 </head>
 <body>
 
@@ -255,6 +271,7 @@ table.prev th{color:var(--mut);font-size:12px;text-transform:uppercase;letter-sp
     <button id="bScan" class="btn pri big"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:26px;height:26px"><path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2M3 12h18"/></svg>Ler QR code</button>
     <div class="scanwrap hide" id="scanwrap"><div id="reader"></div><div class="corners"><i></i><i></i><i></i><i></i></div></div>
     <p class="scanhint">Aponte a câmera para o QR code do vale do funcionário</p>
+    <div style="text-align:center;margin-top:12px"><button id="bKiosk" class="btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:18px;height:18px"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>Modo quiosque (tela cheia)</button></div>
     <div class="divider">ou busque pelo nome</div>
     <input id="busca" placeholder="Digite o nome do funcionário">
     <div id="res" style="margin-top:12px"></div>
@@ -270,6 +287,7 @@ table.prev th{color:var(--mut);font-size:12px;text-transform:uppercase;letter-sp
       <button class="btn" id="bImp"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>Importar lista</button>
       <button class="btn" id="bSec"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 21V8l8-5 8 5v13M4 21h16M9 21v-6h6v6"/></svg>Setores</button>
       <button class="btn" id="bBlast" style="border-color:#bfe6cd;color:var(--ok)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:18px;height:18px"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4z"/></svg>Disparar pendentes</button>
+      <select id="printF" title="Quem imprimir"><option value="all">Imprimir: todos</option><option value="pend">Imprimir: só pendentes</option></select>
       <button class="btn" id="bPrint"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9V2h12v7M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2M6 14h12v8H6z"/></svg>Cartões</button>
     </div>
     <div class="grid" id="rows"></div>
@@ -289,12 +307,18 @@ table.prev th{color:var(--mut);font-size:12px;text-transform:uppercase;letter-sp
       </div>
       <div class="box2"><h3 style="font-size:24px;color:var(--wine);margin-bottom:10px">Progresso por setor</h3><div id="setores"></div></div>
     </div>
+    <div class="box2" style="margin-top:14px">
+      <h3 style="font-size:24px;color:var(--wine)">Ainda não retiraram <span id="pendN"></span></h3>
+      <div id="pendList" class="pendlist"></div>
+      <button class="btn pri" id="bReenv"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:18px;height:18px"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4z"/></svg>Reenviar links para pendentes</button>
+    </div>
     <p style="margin-top:16px"><button class="btn" id="bCsv"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>Exportar CSV</button></p>
   </section>
 </div>
 
 <!-- VEREDITO -->
 <div id="vd"></div>
+<button id="kExit" class="btn">Sair do quiosque</button>
 
 <!-- CONFIRMAÇÃO DE BAIXA -->
 <dialog id="cfm"><div class="dlg">
@@ -351,7 +375,7 @@ table.prev th{color:var(--mut);font-size:12px;text-transform:uppercase;letter-sp
 <!-- DISPARO -->
 <dialog id="blast"><div class="dlg">
   <h3>Disparo de links</h3>
-  <p class="dsub">O WhatsApp abre com a mensagem pronta. Envie, volte aqui e clique em <b>Próximo</b>.</p>
+  <p class="dsub">O WhatsApp abre com a mensagem pronta. Envie, volte aqui e toque em <b>Abrir WhatsApp</b> para a próxima pessoa.</p>
   <div class="cfm-body" id="bWho"></div>
   <p id="bCount" style="text-align:center;color:var(--mut);margin:14px 0 0"></p>
   <div class="drow" style="justify-content:center">
@@ -439,6 +463,7 @@ const IC = {
   pen: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 3a2.8 2.8 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5z"/></svg>',
   trash: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6M10 11v6M14 11v6"/></svg>',
   undo: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7v6h6M3 13a9 9 0 1 0 3-7.7L3 7"/></svg>',
+  file: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6"/></svg>',
   send: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4z"/></svg>',
   check: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>',
   x: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>'
@@ -830,16 +855,46 @@ function boot() {
       $('bWho').innerHTML = `${avatar(f, 56)}<div class="who"><b>${esc(f.nome)}</b><small>${esc(f.setor || '')} · ${esc(fmtTel(f.tel))}</small></div>`;
       $('bCount').textContent = (bI + 1) + ' de ' + bQ.length;
     }
-    $('bBlast').onclick = () => {
-      bQ = funcs.filter(f => f.tel && !ret.has(f.id) && !f.enviadoEm);
-      if (!bQ.length) return alert('Nenhum funcionário pendente com link ainda não enviado.');
-      bI = 0;
+    function openBlast(q, msg) {
+      if (!q.length) return alert(msg);
+      bQ = q; bI = 0;
       $('blast').showModal();
       bRender();
-    };
+    }
+    $('bBlast').onclick = () => openBlast(funcs.filter(f => f.tel && !ret.has(f.id) && !f.enviadoEm), 'Nenhum funcionário pendente com link ainda não enviado.');
+    $('bReenv').onclick = () => openBlast(funcs.filter(f => f.tel && !ret.has(f.id)), 'Nenhum funcionário pendente com telefone cadastrado.');
     $('bOpen').onclick = () => { const f = bQ[bI]; if (f) { wa(f); bI++; bRender(); } };
     $('bSkip').onclick = () => { bI++; bRender(); };
     $('bStop').onclick = () => $('blast').close();
+
+    /* ---------- VALE EM PDF INDIVIDUAL ---------- */
+    function printVale(f) {
+      $('print').dataset.mode = 'solo';
+      $('print').innerHTML = `<div class="pv">
+        <img src="logo-indemetal.jpg" alt="" onerror="this.style.display='none'">
+        <div class="pv-tag">VALE DIGITAL · ${ciclo.split('-').reverse().join('/')}</div>
+        <h2>1 Cesta Básica</h2>
+        <b class="pv-n">${esc(f.nome)}</b>
+        <p class="pv-r">${f.temporario ? 'Temporário' : 'Reg. ' + esc(f.reg || '-')}${f.setor ? ' · ' + esc(f.setor) : ''}</p>
+        <div class="pv-q">${qr('VC:' + f.token)}</div>
+        <p class="pv-i">Apresente este código na retirada da cesta.<br>Código pessoal e intransferível.</p>
+        <div class="pv-f">INDEMETAL · CESTA BÁSICA</div>
+      </div>`;
+      print();
+    }
+
+    /* ---------- MODO QUIOSQUE ---------- */
+    $('bKiosk').onclick = async () => {
+      document.body.classList.add('kiosk');
+      document.querySelector('#tabs [data-t="t1"]').click();
+      try { await document.documentElement.requestFullscreen(); } catch (e) {}
+      setTimeout(() => { if (!sc) $('bScan').click(); }, 350);
+    };
+    $('kExit').onclick = async () => {
+      document.body.classList.remove('kiosk');
+      try { await document.exitFullscreen(); } catch (e) {}
+      stopScan();
+    };
 
     $('rows').onclick = e => {
       const b = e.target.closest('button');
@@ -850,6 +905,7 @@ function boot() {
       if (a === 'qr') openQr(f);
       if (a === 'wa') wa(f);
       if (a === 'sent') toggleSent(f);
+      if (a === 'pdf') printVale(f);
       if (a === 'edit') openEdit(f);
       if (a === 'un' && confirm(`Desfazer a baixa de ${f.nome}?`)) deleteDoc(doc(db, 'retiradas', ret.get(f.id).id));
       if (a === 'del' && confirm(`Excluir ${f.nome} da lista?`)) deleteDoc(doc(db, 'funcionarios', f.id));
@@ -858,7 +914,10 @@ function boot() {
     $('fq').oninput = $('fs').onchange = $('ffs').onchange = () => render();
 
     $('bPrint').onclick = () => {
-      $('print').innerHTML = funcs.map(f => `<div class="pc"><div class="pb">INDEMETAL · CESTA BÁSICA</div><b>Vale — 1 Cesta Básica</b><br>${ciclo.split('-').reverse().join('/')}${qr('VC:' + f.token)}<b>${esc(f.nome)}</b><br>${f.temporario ? '<i>Temporário</i>' : 'Reg. ' + esc(f.reg || '-')} · ${esc(f.setor || '')}</div>`).join('');
+      const list = funcs.filter(f => $('printF').value === 'all' || !ret.has(f.id));
+      if (!list.length) return alert('Ninguém para imprimir com esse filtro.');
+      $('print').dataset.mode = '';
+      $('print').innerHTML = list.map(f => `<div class="pc"><div class="pb">INDEMETAL · CESTA BÁSICA</div><b>Vale — 1 Cesta Básica</b><br>${ciclo.split('-').reverse().join('/')}${qr('VC:' + f.token)}<b>${esc(f.nome)}</b><br>${f.temporario ? '<i>Temporário</i>' : 'Reg. ' + esc(f.reg || '-')} · ${esc(f.setor || '')}</div>`).join('');
       print();
     };
 
@@ -896,6 +955,7 @@ function boot() {
           <span class="st ${r ? 'ok' : 'pend'}">${r ? 'Retirou ' + fd(r.data) : 'Pendente'}</span>
           <div class="acts">
             <button class="btn" data-a="qr" data-i="${f.id}">${IC.qr}QR / Link</button>
+            <button class="btn" data-a="pdf" data-i="${f.id}">${IC.file}PDF</button>
             <button class="btn" data-a="wa" data-i="${f.id}">${IC.wa}WhatsApp</button>
             <button class="btn" data-a="sent" data-i="${f.id}"${sent ? ' style="background:#dcf3e6;border-color:#bfe6cd;color:#1e7a46"' : ''}>${IC.send}${sent ? 'Link enviado ✓' : 'Marcar enviado'}</button>
             <button class="btn" data-a="edit" data-i="${f.id}">${IC.pen}Editar</button>
@@ -919,31 +979,15 @@ function boot() {
       $('setores').innerHTML = Object.entries(S).sort((a, b) => b[1].t - a[1].t).map(([n, s]) =>
         `<div class="sr"><span title="${esc(n)}">${esc(n)}</span><i><u style="width:${s.d / s.t * 100}%"></u></i><span>${s.d}/${s.t}</span></div>`).join('')
         || '<p style="color:var(--mut)">Sem dados ainda.</p>';
+      const pendL = funcs.filter(f => !ret.has(f.id));
+      $('pendN').innerHTML = `<span class="chip" style="background:#fdeaea;color:var(--wine3)">${pendL.length}</span>`;
+      $('pendList').innerHTML = pendL.slice(0, 150).map(f => `<span class="pchip">${avatar(f, 26)}${esc(f.nome)}</span>`).join('') + (pendL.length > 150 ? `<span class="chip">+${pendL.length - 150} pessoas</span>` : '');
       $('busca').oninput();
     }
   } catch (err) {
     document.getElementById('le').textContent = 'Erro de inicialização: ' + err.message;
   }
 }
-</script>
-<script>
-if('serviceWorker' in navigator)addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}));
-(function(){
-  if(new URLSearchParams(location.search).get('v'))return;
-  if(matchMedia('(display-mode: standalone)').matches||navigator.standalone)return;
-  var ev=null,ios=/iphone|ipad|ipod/i.test(navigator.userAgent);
-  var b=document.createElement('button');
-  b.textContent='Instalar app';
-  b.style.cssText='display:none;position:fixed;right:14px;bottom:14px;z-index:5;padding:10px 16px;border:0;border-radius:99px;background:#7a1420;color:#fff;font:600 15px Barlow,system-ui,sans-serif;box-shadow:0 2px 8px rgba(0,0,0,.3);cursor:pointer';
-  document.body.appendChild(b);
-  addEventListener('beforeinstallprompt',function(e){e.preventDefault();ev=e;b.style.display='block'});
-  addEventListener('appinstalled',function(){b.style.display='none'});
-  if(ios)b.style.display='block';
-  b.onclick=function(){
-    if(ev){ev.prompt();ev.userChoice.then(function(){ev=null;b.style.display='none'})}
-    else alert('Para instalar: toque no botão Compartilhar do Safari e escolha "Adicionar à Tela de Início".');
-  };
-})();
 </script>
 </body>
 </html>
