@@ -102,6 +102,8 @@ img{max-width:100%}
 .st{position:absolute;top:12px;right:12px;font-size:12px;font-weight:700;padding:4px 11px;border-radius:999px}
 .st.ok{background:var(--okbg);color:var(--ok)}
 .st.pend{background:#f1f2f4;color:var(--mut)}
+.card.sent{background:#f2fbf5;border-color:#b7e2c6}
+.card.sent::before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--ok);border-radius:16px 0 0 16px}
 .empty{grid-column:1/-1;text-align:center;color:var(--mut);background:#fff;border:1px dashed var(--line);border-radius:var(--r);padding:40px 20px}
 /* ---------- PAINEL ---------- */
 #kpi{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:18px}
@@ -261,10 +263,11 @@ table.prev th{color:var(--mut);font-size:12px;text-transform:uppercase;letter-sp
     <div class="toolbar">
       <input id="fq" class="grow" placeholder="Buscar nome, matrícula ou telefone">
       <select id="ffs"><option value="all">Todos os setores</option></select>
-      <select id="fs"><option value="all">Todos</option><option value="pend">Pendentes</option><option value="ok">Retiraram</option></select>
+      <select id="fs"><option value="all">Todos</option><option value="pend">Pendentes</option><option value="ok">Retiraram</option><option value="sent">Link enviado</option><option value="nsent">Sem link</option></select>
       <button class="btn pri" id="bNew"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>Novo</button>
       <button class="btn" id="bImp"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>Importar lista</button>
       <button class="btn" id="bSec"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 21V8l8-5 8 5v13M4 21h16M9 21v-6h6v6"/></svg>Setores</button>
+      <button class="btn" id="bBlast" style="border-color:#bfe6cd;color:var(--ok)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:18px;height:18px"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4z"/></svg>Disparar pendentes</button>
       <button class="btn" id="bPrint"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9V2h12v7M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2M6 14h12v8H6z"/></svg>Cartões</button>
     </div>
     <div class="grid" id="rows"></div>
@@ -343,6 +346,19 @@ table.prev th{color:var(--mut);font-size:12px;text-transform:uppercase;letter-sp
   <div style="display:flex;gap:8px;margin-top:14px"><input id="secNew" placeholder="Novo setor..."><button class="btn pri" id="secAdd">Adicionar</button></div>
 </div></dialog>
 
+<!-- DISPARO -->
+<dialog id="blast"><div class="dlg">
+  <h3>Disparo de links</h3>
+  <p class="dsub">O WhatsApp abre com a mensagem pronta. Envie, volte aqui e clique em <b>Próximo</b>.</p>
+  <div class="cfm-body" id="bWho"></div>
+  <p id="bCount" style="text-align:center;color:var(--mut);margin:14px 0 0"></p>
+  <div class="drow" style="justify-content:center">
+    <button class="btn" id="bStop">Encerrar</button>
+    <button class="btn" id="bSkip">Pular</button>
+    <button class="btn pri" id="bOpen">Abrir WhatsApp</button>
+  </div>
+</div></dialog>
+
 <!-- QR -->
 <dialog id="dlg"><div class="dlg" style="text-align:center">
   <div id="dq"></div><h3 id="dn" style="margin-top:10px"></h3><p class="dsub" id="dr" style="margin-top:-4px"></p>
@@ -356,7 +372,7 @@ table.prev th{color:var(--mut);font-size:12px;text-transform:uppercase;letter-sp
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-import { getFirestore, collection, doc, onSnapshot, query, where, writeBatch, runTransaction, deleteDoc, setDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import { getFirestore, collection, doc, onSnapshot, query, where, writeBatch, runTransaction, deleteDoc, setDoc, deleteField } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyD4UREbU6hkSlyy60hfjXi2AyQpiEfjWaI",
@@ -398,12 +414,30 @@ function beep(ok) {
     o.start(t);
   } catch (e) {}
 }
+const normTel = t => {
+  const d = String(t || '').replace(/\D/g, '');
+  if (!d) return '';
+  return d.startsWith('55') ? d : '55' + d;
+};
+const fmtTel = d => {
+  d = String(d || '').replace(/\D/g, '');
+  if (d.length === 13) return '+' + d.slice(0, 2) + ' (' + d.slice(2, 4) + ') ' + d.slice(4, 9) + '-' + d.slice(9);
+  if (d.length === 12) return '+' + d.slice(0, 2) + ' (' + d.slice(2, 4) + ') ' + d.slice(4, 8) + '-' + d.slice(8);
+  return d;
+};
+const maskBR = d => {
+  if (d.length > 7) return '(' + d.slice(0, 2) + ') ' + d.slice(2, 7) + '-' + d.slice(7, 11);
+  if (d.length > 2) return '(' + d.slice(0, 2) + ') ' + d.slice(2);
+  if (d.length) return '(' + d;
+  return '';
+};
 const IC = {
   qr: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3h-3zM20 14h1M14 20h1M20 19v2M17 20h3"/></svg>',
   wa: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 11.5a8.5 8.5 0 0 1-12.4 7.6L3 21l1.9-5.6A8.5 8.5 0 1 1 21 11.5z"/></svg>',
   pen: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 3a2.8 2.8 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5z"/></svg>',
   trash: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6M10 11v6M14 11v6"/></svg>',
   undo: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7v6h6M3 13a9 9 0 1 0 3-7.7L3 7"/></svg>',
+  send: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4z"/></svg>',
   check: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>',
   x: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>'
 };
@@ -568,11 +602,8 @@ function boot() {
       if (!t && !$('fReg').value) $('fReg').value = nextReg();
     };
     $('fTel').oninput = e => {
-      let v = e.target.value.replace(/\D/g, '').slice(0, 11);
-      if (v.length > 6) v = '(' + v.slice(0, 2) + ') ' + v.slice(2, 7) + '-' + v.slice(7);
-      else if (v.length > 2) v = '(' + v.slice(0, 2) + ') ' + v.slice(2);
-      else if (v.length > 0) v = '(' + v;
-      e.target.value = v;
+      const v = e.target.value.replace(/\D/g, '').replace(/^55/, '').slice(0, 11);
+      e.target.value = maskBR(v);
     };
     function compressImg(file) {
       return new Promise(res => {
@@ -620,7 +651,7 @@ function boot() {
       const nome = $('fNome').value.trim();
       const temp = $('fTemp').checked;
       const reg = $('fReg').value.trim();
-      const tel = $('fTel').value.trim();
+      const tel = normTel($('fTel').value);
       let setor = $('fSetor').value === '__new' ? $('fSetorNew').value.trim() : $('fSetor').value;
       if (!nome) return;
       if (!temp && !reg) { $('fReg').focus(); return; }
@@ -652,7 +683,7 @@ function boot() {
       $('fReg').disabled = !!f.temporario;
       $('fReg').value = f.temporario ? '' : (f.reg || '');
       $('regHint').textContent = f.temporario ? '' : 'próximo número sugerido: ' + nextReg();
-      $('fTel').value = f.tel || '';
+      $('fTel').value = maskBR(String(f.tel || '').replace(/\D/g, '').replace(/^55/, '').slice(0, 11));
       fillSetorSel();
       if (f.setor) {
         if ([...$('fSetor').options].some(o => o.value === f.setor)) $('fSetor').value = f.setor;
@@ -723,7 +754,7 @@ function boot() {
         if (/^nome$/i.test(p[0] || '')) return;
         const nome = p[0] || '';
         const reg = p[1] || '';
-        const item = { nome, reg, tel: p[2] || '', setor: p[3] || 'Sem setor', temp: !reg };
+        const item = { nome, reg, tel: normTel(p[2]), setor: p[3] || 'Sem setor', temp: !reg };
         let dup = '';
         if (nome) {
           if (nomes.has(nome.toLowerCase()) || seenN.has(nome.toLowerCase())) dup = 'Nome já cadastrado';
@@ -774,12 +805,40 @@ function boot() {
       $('dc').textContent = 'Copiar link';
       $('dlg').showModal();
     }
+    async function markSent(f) {
+      if (!f.enviadoEm) await setDoc(doc(db, 'funcionarios', f.id), { enviadoEm: Date.now() }, { merge: true });
+    }
+    async function toggleSent(f) {
+      try {
+        if (f.enviadoEm) await setDoc(doc(db, 'funcionarios', f.id), { enviadoEm: deleteField() }, { merge: true });
+        else await setDoc(doc(db, 'funcionarios', f.id), { enviadoEm: Date.now() }, { merge: true });
+      } catch (e) { alert('Erro ao atualizar o envio.'); }
+    }
     function wa(f) {
-      let p = (f.tel || '').replace(/\D/g, '');
-      if (p && p.length <= 11) p = '55' + p;
+      const p = normTel(f.tel);
       if (!p) return alert(f.nome + ' não tem telefone cadastrado.');
+      markSent(f);
       window.open('https://wa.me/' + p + '?text=' + encodeURIComponent(`Olá ${f.nome}! Este é o seu vale da Cesta Básica (${new Date().toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}). Abra o link e mostre o QR code na retirada: ${link(f)}`), '_blank');
     }
+    /* ---------- DISPARO SEQUENCIAL ---------- */
+    let bQ = [], bI = 0;
+    function bRender() {
+      if (bI >= bQ.length) { $('blast').close(); alert('Disparo concluído.'); return; }
+      const f = bQ[bI];
+      $('bWho').innerHTML = `${avatar(f, 56)}<div class="who"><b>${esc(f.nome)}</b><small>${esc(f.setor || '')} · ${esc(fmtTel(f.tel))}</small></div>`;
+      $('bCount').textContent = (bI + 1) + ' de ' + bQ.length;
+    }
+    $('bBlast').onclick = () => {
+      bQ = funcs.filter(f => f.tel && !ret.has(f.id) && !f.enviadoEm);
+      if (!bQ.length) return alert('Nenhum funcionário pendente com link ainda não enviado.');
+      bI = 0;
+      $('blast').showModal();
+      bRender();
+    };
+    $('bOpen').onclick = () => { const f = bQ[bI]; if (f) { wa(f); bI++; bRender(); } };
+    $('bSkip').onclick = () => { bI++; bRender(); };
+    $('bStop').onclick = () => $('blast').close();
+
     $('rows').onclick = e => {
       const b = e.target.closest('button');
       if (!b) return;
@@ -788,6 +847,7 @@ function boot() {
       const a = b.dataset.a;
       if (a === 'qr') openQr(f);
       if (a === 'wa') wa(f);
+      if (a === 'sent') toggleSent(f);
       if (a === 'edit') openEdit(f);
       if (a === 'un' && confirm(`Desfazer a baixa de ${f.nome}?`)) deleteDoc(doc(db, 'retiradas', ret.get(f.id).id));
       if (a === 'del' && confirm(`Excluir ${f.nome} da lista?`)) deleteDoc(doc(db, 'funcionarios', f.id));
@@ -801,9 +861,9 @@ function boot() {
     };
 
     $('bCsv').onclick = () => {
-      const c = '\ufeffSetor;Nome;Matr\xc3\xadcula;Telefone;Situa\xc3\xa7\xc3\xa3o;Data\n' + funcs.map(f => {
+      const c = '\ufeffSetor;Nome;Matr\xc3\xadcula;Telefone;Situa\xc3\xa7\xc3\xa3o;Data;Link enviado\n' + funcs.map(f => {
         const r = ret.get(f.id);
-        return [f.setor || '', f.nome, f.temporario ? 'TEMP' : (f.reg || ''), f.tel || '', r ? 'Retirou' : 'Pendente', r ? fd(r.data) : ''].join(';');
+        return [f.setor || '', f.nome, f.temporario ? 'TEMP' : (f.reg || ''), fmtTel(f.tel), r ? 'Retirou' : 'Pendente', r ? fd(r.data) : '', f.enviadoEm ? 'Sim' : 'N\xc3\xa3o'].join(';');
       }).join('\n');
       const a = document.createElement('a');
       a.href = URL.createObjectURL(new Blob([c], { type: 'text/csv' }));
@@ -814,6 +874,7 @@ function boot() {
     /* ---------- RENDER ---------- */
     function render() {
       const tot = funcs.length, done = funcs.filter(f => ret.has(f.id)).length;
+      const sentN = funcs.filter(f => f.enviadoEm).length;
       const q = $('fq').value.toLowerCase(), st = $('fs').value, sf = $('ffs').value;
       // filtro de setor
       const allSet = [...new Set([...setores.map(s => s.nome), ...funcs.map(f => f.setor).filter(Boolean)])].sort((a, b) => a.localeCompare(b));
@@ -821,18 +882,20 @@ function boot() {
       const L = funcs.filter(f =>
         (f.nome + ' ' + (f.reg || '') + ' ' + (f.tel || '')).toLowerCase().includes(q) &&
         (sf === 'all' || f.setor === sf) &&
-        (st === 'all' || (st === 'ok') === ret.has(f.id))
+        (st === 'all' || st === 'ok' && ret.has(f.id) || st === 'pend' && !ret.has(f.id) || st === 'sent' && !!f.enviadoEm || st === 'nsent' && !f.enviadoEm)
       );
       $('rows').innerHTML = L.map(f => {
         const r = ret.get(f.id);
-        return `<div class="card">${avatar(f, 46)}
+        const sent = !!f.enviadoEm;
+        return `<div class="card ${sent && !r ? 'sent' : ''}">${avatar(f, 46)}
           <div class="info"><b>${esc(f.nome)}</b>
-            <div class="meta">${regChip(f)}<span class="chip setor">${esc(f.setor || '-')}</span>${f.tel ? `<span class="chip tel">${esc(f.tel)}</span>` : ''}</div>
+            <div class="meta">${regChip(f)}${sent ? '<span class="chip" style="background:#dcf3e6;color:#1e7a46">Link enviado</span>' : ''}<span class="chip setor">${esc(f.setor || '-')}</span>${f.tel ? `<span class="chip tel">${esc(fmtTel(f.tel))}</span>` : ''}</div>
           </div>
           <span class="st ${r ? 'ok' : 'pend'}">${r ? 'Retirou ' + fd(r.data) : 'Pendente'}</span>
           <div class="acts">
             <button class="btn" data-a="qr" data-i="${f.id}">${IC.qr}QR / Link</button>
             <button class="btn" data-a="wa" data-i="${f.id}">${IC.wa}WhatsApp</button>
+            <button class="btn" data-a="sent" data-i="${f.id}"${sent ? ' style="background:#dcf3e6;border-color:#bfe6cd;color:#1e7a46"' : ''}>${IC.send}${sent ? 'Link enviado ✓' : 'Marcar enviado'}</button>
             <button class="btn" data-a="edit" data-i="${f.id}">${IC.pen}Editar</button>
             ${r ? `<button class="btn danger" data-a="un" data-i="${f.id}">${IC.undo}Desfazer</button>` : ''}
             <button class="btn danger" data-a="del" data-i="${f.id}">${IC.trash}</button>
@@ -843,7 +906,7 @@ function boot() {
         <div class="kpi"><div class="ic" style="background:linear-gradient(135deg,#2aa35c,#1e7a46)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg></div><div><b>${done}</b><span>retiraram</span></div></div>
         <div class="kpi"><div class="ic" style="background:linear-gradient(135deg,#e0a63d,#b97b12)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg></div><div><b>${tot - done}</b><span>faltam retirar</span></div></div>
         <div class="kpi"><div class="ic" style="background:linear-gradient(135deg,#d8262c,#7a1420)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2"/><circle cx="10" cy="7" r="4"/><path d="M21 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg></div><div><b>${tot}</b><span>no total</span></div></div>
-        <div class="kpi"><div class="ic" style="background:linear-gradient(135deg,#5b6b85,#38445c)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 21V8l8-5 8 5v13M4 21h16"/></svg></div><div><b>${allSet.length}</b><span>setores</span></div></div>`;
+        <div class="kpi"><div class="ic" style="background:linear-gradient(135deg,#5b6b85,#38445c)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 21V8l8-5 8 5v13M4 21h16"/></svg></div><div><b>${allSet.length}</b><span>setores</span></div><div class="kpi"><div class="ic" style="background:linear-gradient(135deg,#2aa35c,#1e7a46)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4z"/></svg></div><div><b>${sentN}</b><span>links enviados</span></div></div></div>`;
       // donut
       const pct = tot ? Math.round(done / tot * 100) : 0;
       $('dpc').textContent = pct + '%';
